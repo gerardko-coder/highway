@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>SG Expressway Speeds</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- JSZip CDN for unzipping local files if uploaded -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+  <style>
+    /* Custom mobile styling & smooth scroll */
+    body {
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    .badge-1 { background-color: #ef4444; color: white; } /* < 20 km/h - Red */
+    .badge-2 { background-color: #f97316; color: white; } /* 20-29 km/h - Orange */
+    .badge-3 { background-color: #eab308; color: black; } /* 30-39 km/h - Yellow */
+    .badge-4 { background-color: #84cc16; color: black; } /* 40-49 km/h - Lime */
+    .badge-5 { background-color: #22c55e; color: white; } /* 50-59 km/h - Green */
+    .badge-6 { background-color: #10b981; color: white; } /* 60-69 km/h - Emerald */
+    .badge-7 { background-color: #06b6d4; color: white; } /* 70-79 km/h - Cyan */
+    .badge-8 { background-color: #3b82f6; color: white; } /* > 80 km/h - Blue */
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col font-sans">
+
+  <!-- Header Section -->
+  <header class="sticky top-0 z-50 bg-slate-800/90 backdrop-blur border-b border-slate-700 px-4 py-3 flex items-center justify-between shadow-md">
+    <div class="flex items-center space-x-2">
+      <div class="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></div>
+      <h1 class="text-lg font-bold tracking-wide">SG Expressways</h1>
+    </div>
+    <div class="flex items-center space-x-2">
+      <button id="refreshBtn" onclick="fetchLiveSpeedData()" class="bg-indigo-600 hover:bg-indigo-500 active:scale-95 transition-all text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1 shadow">
+        <svg id="refreshIcon" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+        Sync Live
+      </button>
+      <label class="bg-slate-700 hover:bg-slate-600 active:scale-95 transition-all text-xs text-slate-300 font-semibold px-2.5 py-1.5 rounded-lg cursor-pointer">
+        Upload Zip
+        <input type="file" id="fileInput" accept=".zip,.json" class="hidden" onchange="handleFileUpload(event)">
+      </label>
+    </div>
+  </header>
+
+  <!-- Filter & Search Controls -->
+  <section class="p-4 bg-slate-800/50 border-b border-slate-700/50 space-y-3">
+    <div class="relative">
+      <input type="text" id="searchInput" oninput="renderData()" placeholder="Search road name or direction..." 
+             class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500">
+    </div>
+
+    <!-- Expressways Quick Filter Chips -->
+    <div class="flex gap-1.5 overflow-x-auto pb-1 text-xs no-scrollbar" id="expresswayChips">
+      <button onclick="filterExpressway('ALL')" class="chip px-3 py-1 rounded-full bg-indigo-600 text-white font-medium whitespace-nowrap">All</button>
+      <button onclick="filterExpressway('PIE')" class="chip px-3 py-1 rounded-full bg-slate-700 text-slate-300 whitespace-nowrap">PIE</button>
+      <button onclick="filterExpressway('AYE')" class="chip px-3 py-1 rounded-full bg-slate-700 text-slate-300 whitespace-nowrap">AYE</button>
+      <button onclick="filterExpressway('CTE')" class="chip px-3 py-1 rounded-full bg-slate-700 text-slate-300 whitespace-nowrap">CTE</button>
+      <button onclick="filterExpressway('ECP')" class="chip px-3 py-1 rounded-full bg-slate-700 text-slate-300 whitespace-nowrap">ECP</button>
+      <button onclick="filterExpressway('KPE')" class="chip px-3 py-1 rounded-full bg-slate-700 text-slate-300 whitespace-nowrap">KPE</button>
+      <button onclick="filterExpressway('SLE')" class="chip px-3 py-1 rounded-full bg-slate-700 text-slate-300 whitespace-nowrap">SLE</button>
+      <button onclick="filterExpressway('TPE')" class="chip px-3 py-1 rounded-full bg-slate-700 text-slate-300 whitespace-nowrap">TPE</button>
+      <button onclick="filterExpressway('BKE')" class="chip px-3 py-1 rounded-full bg-slate-700 text-slate-300 whitespace-nowrap">BKE</button>
+      <button onclick="filterExpressway('MCE')" class="chip px-3 py-1 rounded-full bg-slate-700 text-slate-300 whitespace-nowrap">MCE</button>
+    </div>
+  </section>
+
+  <!-- Main Content Area -->
+  <main class="flex-1 p-4 overflow-y-auto">
+    <!-- Status / Info Banner -->
+    <div id="statusBanner" class="mb-4 text-xs text-slate-400 bg-slate-800 p-2.5 rounded-lg border border-slate-700 flex justify-between items-center">
+      <span id="statusText">Ready. Click 'Sync Live' or upload a file.</span>
+      <span id="recordCount" class="font-mono text-indigo-400">0 segments</span>
+    </div>
+
+    <!-- Data List Container -->
+    <div id="trafficList" class="space-y-2.5">
+      <!-- Cards dynamically inserted here -->
+    </div>
+  </main>
+
+  <!-- Speed Legend Footer -->
+  <footer class="bg-slate-800 border-t border-slate-700 p-3 text-xs text-slate-400">
+    <div class="text-center font-semibold mb-2 text-slate-300">Speed Bands (km/h)</div>
+    <div class="grid grid-cols-4 gap-1.5 text-center text-[10px]">
+      <div class="badge-1 py-0.5 rounded font-bold">&lt; 20 (Slow)</div>
+      <div class="badge-3 py-0.5 rounded font-bold">30 - 39</div>
+      <div class="badge-5 py-0.5 rounded font-bold">50 - 59</div>
+      <div class="badge-8 py-0.5 rounded font-bold">&gt; 80 (Fast)</div>
+    </div>
+  </footer>
+
+  <script>
+    // Configuration
+    const API_KEY = "mlfDLYgcQGS+KM8/azN30Q==";
+    const LTA_ENDPOINT = "https://datamall2.lta.gov.sg/ltaodataservice/TrafficSpeedBands";
+    // Public CORS proxy fallback for standard mobile browser API calls
+    const CORS_PROXY = "https://corsproxy.io/?"; 
+
+    let rawData = [];
+    let selectedExpressway = 'ALL';
+
+    // Speed Band Descriptions
+    const speedBandMap = {
+      1: { label: "< 20 km/h", class: "badge-1" },
+      2: { label: "20 - 29 km/h", class: "badge-2" },
+      3: { label: "30 - 39 km/h", class: "badge-3" },
+      4: { label: "40 - 49 km/h", class: "badge-4" },
+      5: { label: "50 - 59 km/h", class: "badge-5" },
+      6: { label: "60 - 69 km/h", class: "badge-6" },
+      7: { label: "70 - 79 km/h", class: "badge-7" },
+      8: { label: ">= 80 km/h", class: "badge-8" }
+    };
+
+    // Auto load on init
+    window.addEventListener('DOMContentLoaded', () => {
+      fetchLiveSpeedData();
+    });
+
+    // Fetch Live Data from LTA Endpoint
+    async function fetchLiveSpeedData() {
+      const statusText = document.getElementById('statusText');
+      const refreshIcon = document.getElementById('refreshIcon');
+      
+      statusText.innerText = "Connecting to LTA DataMall...";
+      refreshIcon.classList.add('animate-spin');
+
+      try {
+        // Attempt direct API call first, fallback to proxy if CORS blocks
+        let response;
+        try {
+          response = await fetch(LTA_ENDPOINT, {
+            headers: { 'AccountKey': API_KEY, 'accept': 'application/json' }
+          });
+        } catch (e) {
+          // Fallback via CORS proxy
+          response = await fetch(CORS_PROXY + encodeURIComponent(LTA_ENDPOINT), {
+            headers: { 'AccountKey': API_KEY, 'accept': 'application/json' }
+          });
+        }
+
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        
+        const json = await response.json();
+        rawData = json.value || json.value || json;
+        
+        statusText.innerText = "Updated: " + new Date().toLocaleTimeString();
+        renderData();
+      } catch (err) {
+        console.error(err);
+        statusText.innerText = "Live fetch failed (CORS/Network). Please upload ZIP file.";
+      } finally {
+        refreshIcon.classList.remove('animate-spin');
+      }
+    }
+
+    // Handle Uploading .zip or unpacked .json file manually
+    async function handleFileUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const statusText = document.getElementById('statusText');
+      statusText.innerText = "Reading file...";
+
+      try {
+        if (file.name.endsWith('.zip')) {
+          const zip = new JSZip();
+          const zipContent = await zip.loadAsync(file);
+          // Find the first json file in the archive
+          const jsonFileName = Object.keys(zipContent.files).find(name => name.endsWith('.json'));
+          
+          if (!jsonFileName) throw new Error("No JSON file found in zip");
+          
+          const jsonText = await zipContent.files[jsonFileName].async("string");
+          parseAndLoadJson(jsonText);
+        } else if (file.name.endsWith('.json')) {
+          const jsonText = await file.text();
+          parseAndLoadJson(jsonText);
+        }
+      } catch (err) {
+        alert("Error parsing file: " + err.message);
+        statusText.innerText = "File processing failed.";
+      }
+    }
+
+    function parseAndLoadJson(jsonText) {
+      const parsed = JSON.parse(jsonText);
+      rawData = parsed.value || parsed.value || (Array.isArray(parsed) ? parsed : []);
+      document.getElementById('statusText').innerText = "Loaded local dataset";
+      renderData();
+    }
+
+    // Filter Chips Toggle
+    function filterExpressway(code) {
+      selectedExpressway = code;
+      const chips = document.querySelectorAll('.chip');
+      chips.forEach(chip => {
+        if (chip.innerText === code || (code === 'ALL' && chip.innerText === 'All')) {
+          chip.className = "chip px-3 py-1 rounded-full bg-indigo-600 text-white font-medium whitespace-nowrap";
+        } else {
+          chip.className = "chip px-3 py-1 rounded-full bg-slate-700 text-slate-300 whitespace-nowrap";
+        }
+      });
+      renderData();
+    }
+
+    // Render Filtering & List Items
+    function renderData() {
+      const container = document.getElementById('trafficList');
+      const searchVal = document.getElementById('searchInput').value.toLowerCase();
+      
+      container.innerHTML = '';
+
+      let filtered = rawData.filter(item => {
+        const roadName = (item.RoadName || item.Road || '').toUpperCase();
+        const matchesChip = (selectedExpressway === 'ALL') || roadName.includes(selectedExpressway);
+        const matchesSearch = !searchVal || 
+                              roadName.toLowerCase().includes(searchVal) || 
+                              (item.Location || '').toLowerCase().includes(searchVal);
+        return matchesChip && matchesSearch;
+      });
+
+      document.getElementById('recordCount').innerText = `${filtered.length} segments`;
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-10 text-slate-500">
+            <p>No traffic segments found.</p>
+          </div>`;
+        return;
+      }
+
+      // Render cards
+      filtered.forEach(item => {
+        const band = speedBandMap[item.SpeedBand] || { label: "Unknown", class: "bg-slate-600 text-white" };
+        
+        const card = document.createElement('div');
+        card.className = "bg-slate-800 border border-slate-700/80 rounded-xl p-3 shadow-sm flex items-center justify-between";
+        card.innerHTML = `
+          <div class="space-y-1 pr-2">
+            <div class="flex items-center space-x-2">
+              <span class="font-bold text-sm text-slate-100">${item.RoadName || 'Road Segment'}</span>
+              ${item.Location ? `<span class="text-[10px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded">${item.Location}</span>` : ''}
+            </div>
+            <div class="text-xs text-slate-400">
+              ${item.MinimumSpeed && item.MaximumSpeed ? `Speed range: ${item.MinimumSpeed} - ${item.MaximumSpeed} km/h` : `Band Index: ${item.SpeedBand}`}
+            </div>
+          </div>
+          <div class="text-right">
+            <span class="${band.class} px-2.5 py-1 rounded-lg text-xs font-bold shadow-sm whitespace-nowrap">
+              ${band.label}
+            </span>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+  </script>
+</body>
+</html>
