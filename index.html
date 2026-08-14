@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Singapore Road Speed Dashboard</title>
+    <title>Nearby Road Speeds (5km Radius)</title>
     
     <!-- Leaflet CSS for Map rendering -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -35,7 +35,7 @@
             display: flex;
             flex-direction: column;
             height: 100vh;
-            height: 100dvh; /* Dynamic viewport height for mobile */
+            height: 100dvh;
             overflow: hidden;
         }
 
@@ -132,11 +132,18 @@
             padding: 0.75rem;
             border-bottom: 1px solid var(--border-color);
             display: flex;
-            gap: 0.5rem;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+
+        .filter-info {
+            font-size: 0.75rem;
+            color: #38bdf8;
+            font-weight: 600;
         }
 
         .filter-bar select {
-            flex: 1;
+            width: 100%;
             padding: 0.5rem;
             background-color: var(--bg-color);
             color: var(--text-color);
@@ -224,24 +231,24 @@
             border-radius: 2px;
         }
 
-        /* Pulsing User Location Marker CSS */
+        /* Pulsing User Location Marker */
         .user-location-marker {
-            width: 16px;
-            height: 16px;
+            width: 18px;
+            height: 18px;
             background-color: #38bdf8;
-            border: 2px solid white;
+            border: 3px solid white;
             border-radius: 50%;
-            box-shadow: 0 0 8px rgba(0,0,0,0.5);
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
             animation: pulse 1.8s infinite;
         }
 
         @keyframes pulse {
             0% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.7); }
-            70% { box-shadow: 0 0 0 12px rgba(56, 189, 248, 0); }
+            70% { box-shadow: 0 0 0 14px rgba(56, 189, 248, 0); }
             100% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0); }
         }
 
-        /* Mobile Responsive UI Tweaks */
+        /* Mobile Responsive Drawer */
         @media (max-width: 768px) {
             header {
                 padding: 0.5rem 0.75rem;
@@ -252,7 +259,7 @@
             }
 
             .header-title p {
-                display: none; /* Hide subtitle on mobile screens */
+                display: none;
             }
 
             .main-container {
@@ -264,7 +271,6 @@
                 width: 100%;
             }
 
-            /* Convert sidebar to a Bottom Drawer on Mobile */
             .sidebar {
                 position: absolute;
                 bottom: 0;
@@ -278,7 +284,7 @@
                 border-top-left-radius: 1rem;
                 border-top-right-radius: 1rem;
                 box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
-                transform: translateY(calc(100% - 50px)); /* Peek handle bar only */
+                transform: translateY(calc(100% - 50px));
             }
 
             .sidebar.expanded {
@@ -316,13 +322,13 @@
 
     <header>
         <div class="header-title">
-            <h1>Singapore Traffic Speeds</h1>
-            <p>LTA DataMall Speed Bands Dashboard</p>
+            <h1>Nearby Traffic Speeds</h1>
+            <p>LTA Speed Bands &bull; 5km Vicinity</p>
         </div>
         <div class="controls">
             <span id="lastUpdated" class="status-badge">Updated: Never</span>
             <button id="locateBtn" class="btn-icon" title="Find My Location">
-                📍 <span class="btn-text">Locate Me</span>
+                📍 <span class="btn-text">Recenter (5km)</span>
             </button>
             <button id="refreshBtn">🔄 Refresh</button>
         </div>
@@ -336,8 +342,9 @@
                 <div class="drawer-bar"></div>
             </div>
             <div class="filter-bar">
+                <div id="filterInfo" class="filter-info">Showing roads within 5km...</div>
                 <select id="roadFilter">
-                    <option value="ALL">All Loaded Roads</option>
+                    <option value="ALL">All Nearby Roads</option>
                 </select>
             </div>
             <div id="expresswayList" class="expressway-list">
@@ -358,10 +365,16 @@
 
     <script>
         const DATA_URL = "./traffic.json";
+        const RADIUS_KM = 5.0; // Radius filter threshold in kilometers
+
+        // Default Singapore Center (Used if user denies GPS location permission)
+        const DEFAULT_LOCATION = { lat: 1.3521, lng: 103.8198 };
 
         let map;
         let polylineGroup;
+        let userCircle;
         let userMarker;
+        let currentUserPos = null;
         let trafficData = [];
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -369,24 +382,20 @@
             fetchTrafficData();
 
             document.getElementById('refreshBtn').addEventListener('click', fetchTrafficData);
-            document.getElementById('locateBtn').addEventListener('click', locateUser);
+            document.getElementById('locateBtn').addEventListener('click', getUserLocation);
             document.getElementById('roadFilter').addEventListener('change', renderData);
             
-            // Mobile Drawer toggle interaction
-            const sidebar = document.getElementById('sidebar');
+            // Mobile Drawer handle listener
             document.getElementById('drawerHandle').addEventListener('click', () => {
-                sidebar.classList.toggle('expanded');
+                document.getElementById('sidebar').classList.toggle('expanded');
             });
 
-            // Periodically check local file every 2 minutes
             setInterval(fetchTrafficData, 120000);
         });
 
         function initMap() {
-            // Center around Singapore
-            map = L.map('map', { zoomControl: false }).setView([1.3521, 103.8198], 12);
+            map = L.map('map', { zoomControl: false }).setView([DEFAULT_LOCATION.lat, DEFAULT_LOCATION.lng], 13);
 
-            // Re-add zoom control to top-right corner to avoid mobile overlap
             L.control.zoom({ position: 'topright' }).addTo(map);
 
             L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
@@ -397,9 +406,24 @@
             polylineGroup = L.layerGroup().addTo(map);
         }
 
-        function locateUser() {
+        // Haversine formula to compute distance between two GPS coordinates in kilometers
+        function calculateDistanceKm(lat1, lon1, lat2, lon2) {
+            const R = 6371; // Earth radius in km
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c;
+        }
+
+        function getUserLocation() {
             if (!navigator.geolocation) {
-                alert("Geolocation is not supported by your browser.");
+                console.warn("Geolocation not supported. Defaulting to Central Singapore.");
+                currentUserPos = DEFAULT_LOCATION;
+                updateUserMapLocation();
+                renderData();
                 return;
             }
 
@@ -408,49 +432,56 @@
 
             navigator.geolocation.getCurrentPosition(
                 (position) => {
-                    const lat = position.coords.latitude;
-                    const lng = position.coords.longitude;
+                    currentUserPos = {
+                        lat: position.coords.latitude,
+                        lng: position.coords.longitude
+                    };
 
-                    // Remove existing marker if present
-                    if (userMarker) map.removeLayer(userMarker);
+                    updateUserMapLocation();
+                    renderData();
 
-                    // Create pulsing blue dot for user location
-                    const userIcon = L.divIcon({
-                        className: 'user-location-marker',
-                        iconSize: [16, 16],
-                        iconAnchor: [8, 8]
-                    });
-
-                    userMarker = L.marker([lat, lng], { icon: userIcon }).addTo(map);
-                    userMarker.bindPopup("<strong>You are here</strong>").openPopup();
-
-                    // Fly to user location
-                    map.flyTo([lat, lng], 15);
-
-                    locateBtn.innerHTML = '📍 <span class="btn-text">Locate Me</span>';
+                    locateBtn.innerHTML = '📍 <span class="btn-text">Recenter (5km)</span>';
                 },
                 (error) => {
-                    console.error("Location error:", error);
-                    alert("Unable to retrieve your location. Check location permissions.");
-                    locateBtn.innerHTML = '📍 <span class="btn-text">Locate Me</span>';
+                    console.warn("Location access denied or failed. Using default location.", error);
+                    currentUserPos = DEFAULT_LOCATION;
+                    updateUserMapLocation();
+                    renderData();
+                    locateBtn.innerHTML = '📍 <span class="btn-text">Recenter (5km)</span>';
                 },
-                { enableHighAccuracy: true, timeout: 10000 }
+                { enableHighAccuracy: true, timeout: 8000 }
             );
         }
 
-        function populateRoadFilter() {
-            const filterSelect = document.getElementById('roadFilter');
-            filterSelect.innerHTML = '<option value="ALL">All Loaded Roads</option>';
+        function updateUserMapLocation() {
+            if (!currentUserPos) return;
 
-            const uniqueRoads = [...new Set(trafficData.map(item => item.RoadName))].sort();
-            uniqueRoads.forEach(road => {
-                if(road) {
-                    const opt = document.createElement('option');
-                    opt.value = road;
-                    opt.textContent = road;
-                    filterSelect.appendChild(opt);
-                }
+            // Remove existing user indicators
+            if (userMarker) map.removeLayer(userMarker);
+            if (userCircle) map.removeLayer(userCircle);
+
+            // Draw 5km radius visual circle around user
+            userCircle = L.circle([currentUserPos.lat, currentUserPos.lng], {
+                radius: RADIUS_KM * 1000,
+                color: '#0284c7',
+                fillColor: '#0284c7',
+                fillOpacity: 0.05,
+                weight: 1.5,
+                dashArray: '4, 4'
+            }).addTo(map);
+
+            // Draw pulsing user marker
+            const userIcon = L.divIcon({
+                className: 'user-location-marker',
+                iconSize: [18, 18],
+                iconAnchor: [9, 9]
             });
+
+            userMarker = L.marker([currentUserPos.lat, currentUserPos.lng], { icon: userIcon }).addTo(map);
+            userMarker.bindPopup("<strong>You are here</strong>");
+
+            // Fly map to user location
+            map.flyTo([currentUserPos.lat, currentUserPos.lng], 13);
         }
 
         async function fetchTrafficData() {
@@ -468,10 +499,14 @@
                 trafficData = data.value || [];
                 
                 document.getElementById('lastUpdated').textContent = data.lastUpdatedTime ? 
-                    `LTA: ${data.lastUpdatedTime.split(' ')[1] || data.lastUpdatedTime}` : `Updated: ${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
-                
-                populateRoadFilter();
-                renderData();
+                    `LTA: ${data.lastUpdatedTime.split(' ')[1] || data.lastUpdatedTime}` : 
+                    `Updated: ${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+
+                if (!currentUserPos) {
+                    getUserLocation();
+                } else {
+                    renderData();
+                }
             } catch (err) {
                 console.error("Failed to load traffic data:", err);
                 alert("Could not load traffic.json file.");
@@ -480,6 +515,24 @@
                     refreshBtn.textContent = '🔄 Refresh';
                     refreshBtn.disabled = false;
                 }
+            }
+        }
+
+        function populateRoadFilter(nearbyItems) {
+            const filterSelect = document.getElementById('roadFilter');
+            const selectedVal = filterSelect.value;
+            filterSelect.innerHTML = '<option value="ALL">All Nearby Roads</option>';
+
+            const uniqueRoads = [...new Set(nearbyItems.map(item => item.RoadName).filter(Boolean))].sort();
+            uniqueRoads.forEach(road => {
+                const opt = document.createElement('option');
+                opt.value = road;
+                opt.textContent = road;
+                filterSelect.appendChild(opt);
+            });
+
+            if (uniqueRoads.includes(selectedVal)) {
+                filterSelect.value = selectedVal;
             }
         }
 
@@ -502,21 +555,42 @@
             const listContainer = document.getElementById('expresswayList');
             listContainer.innerHTML = '';
 
+            if (!currentUserPos) return;
+
+            // Step 1: Filter full dataset to segments within 5km radius of user
+            const nearbyItems = trafficData.filter(item => {
+                const startLat = parseFloat(item.StartLat);
+                const startLng = parseFloat(item.StartLon);
+
+                if (isNaN(startLat) || isNaN(startLng)) return false;
+
+                const distanceKm = calculateDistanceKm(
+                    currentUserPos.lat, currentUserPos.lng,
+                    startLat, startLng
+                );
+
+                return distanceKm <= RADIUS_KM;
+            });
+
+            populateRoadFilter(nearbyItems);
+
             const selectedFilter = document.getElementById('roadFilter').value;
 
-            const filteredData = trafficData.filter(item => {
+            // Step 2: Apply dropdown selection filter
+            const filteredData = nearbyItems.filter(item => {
                 if (selectedFilter !== 'ALL') {
                     return item.RoadName === selectedFilter;
                 }
                 return true;
             });
 
+            document.getElementById('filterInfo').textContent = 
+                `Found ${nearbyItems.length} segments within 5km radius`;
+
             if (filteredData.length === 0) {
-                listContainer.innerHTML = `<div style="padding: 1rem; color: var(--text-muted);">No road segments available.</div>`;
+                listContainer.innerHTML = `<div style="padding: 1rem; color: var(--text-muted);">No road segments found within 5km.</div>`;
                 return;
             }
-
-            const bounds = [];
 
             filteredData.forEach(item => {
                 const startLat = parseFloat(item.StartLat);
@@ -531,9 +605,6 @@
                 const speedClass = getSpeedClass(minSpeed, maxSpeed);
 
                 if (!isNaN(startLat) && !isNaN(startLng) && !isNaN(endLat) && !isNaN(endLng)) {
-                    bounds.push([startLat, startLng]);
-                    bounds.push([endLat, endLng]);
-
                     const polyline = L.polyline([[startLat, startLng], [endLat, endLng]], {
                         color: color,
                         weight: 5,
@@ -565,7 +636,6 @@
                 card.addEventListener('click', () => {
                     if (!isNaN(startLat) && !isNaN(startLng)) {
                         map.flyTo([startLat, startLng], 16);
-                        // Auto-collapse bottom drawer on mobile after clicking a card
                         if (window.innerWidth <= 768) {
                             document.getElementById('sidebar').classList.remove('expanded');
                         }
@@ -574,10 +644,6 @@
 
                 listContainer.appendChild(card);
             });
-
-            if (bounds.length > 0 && selectedFilter === 'ALL' && !userMarker) {
-                map.fitBounds(bounds, { padding: [30, 30] });
-            }
         }
     </script>
 </body>
