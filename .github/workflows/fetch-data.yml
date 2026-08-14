@@ -89,7 +89,7 @@ jobs:
         env:
           LTA_KEY: ${{ secrets.LTA_KEY }}
 
-      - name: Commit and Push changes
+      - name: Auto Commit Traffic Data
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "auto: update traffic data [skip ci]"
