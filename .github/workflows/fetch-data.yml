@@ -7,7 +7,7 @@ on:
   workflow_dispatch: # Allows manual trigger from GitHub Actions tab
 
 permissions:
-  contents: write # Explicitly grant write access to commit traffic.json
+  contents: write # Grants write permissions to push traffic.json
 
 jobs:
   fetch-and-commit:
@@ -17,7 +17,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Fetch full history for clean rebases
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -96,10 +96,8 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
-          # Sync with remote first before staging
           git fetch origin main
           git reset --soft origin/main
-          
           git add traffic.json
           
           if ! git diff --staged --quiet; then
@@ -107,5 +105,5 @@ jobs:
             git pull --rebase origin main
             git push origin main
           else
-            console.log("No changes detected in traffic.json.")
+            echo "No changes detected in traffic.json."
           fi
