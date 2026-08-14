@@ -32,7 +32,7 @@
     </button>
   </header>
 
-  <!-- Filter & Search -->
+  <!-- Search & Filters -->
   <section class="p-4 bg-slate-800/50 border-b border-slate-700/50 space-y-3">
     <input type="text" id="searchInput" oninput="renderData()" placeholder="Search road or location..." 
            class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-indigo-500">
@@ -51,7 +51,7 @@
     </div>
   </section>
 
-  <!-- Content -->
+  <!-- Main List View -->
   <main class="flex-1 p-4 overflow-y-auto">
     <div id="statusBanner" class="mb-4 text-xs text-slate-400 bg-slate-800 p-2.5 rounded-lg border border-slate-700 flex justify-between items-center">
       <span id="statusText">Connecting to Live LTA API...</span>
@@ -62,10 +62,8 @@
   </main>
 
   <script>
-    // Live LTA Endpoint & API Key
     const API_KEY = "mlfDLYgcQGS+KM8/azN30Q==";
     const LIVE_API_URL = "http://datamall2.lta.gov.sg/ltaodataservice/TrafficSpeedBands";
-    const CORS_PROXY = "https://corsproxy.io/?";
 
     let rawData = [];
     let selectedExpressway = 'ALL';
@@ -93,29 +91,28 @@
       refreshIcon.classList.add('animate-spin');
 
       try {
-        // Target live API through HTTPS proxy with AccountKey header
-        const proxiedUrl = CORS_PROXY + encodeURIComponent(LIVE_API_URL);
-        
-        const response = await fetch(proxiedUrl, {
-          method: 'GET',
-          headers: {
-            'AccountKey': API_KEY,
-            'accept': 'application/json'
-          }
-        });
+        // Embed AccountKey inside query string parameters to prevent header stripping errors
+        const targetUrlWithKey = `${LIVE_API_URL}?AccountKey=${encodeURIComponent(API_KEY)}`;
+        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrlWithKey)}`;
 
-        if (!response.ok) throw new Error(`API error: ${response.status} ${response.statusText}`);
+        const response = await fetch(proxyUrl);
+        if (!response.ok) throw new Error(`HTTP Error ${response.status}`);
 
-        const json = await response.json();
-        rawData = json.value || [];
+        const wrapper = await response.json();
+        const json = JSON.parse(wrapper.contents);
 
-        statusText.innerText = "Live API Sync: " + new Date().toLocaleTimeString();
+        if (json.error || !json.value) {
+          throw new Error("Invalid API response format or unauthorized AccountKey.");
+        }
+
+        rawData = json.value;
+        statusText.innerText = "Live Sync: " + new Date().toLocaleTimeString();
         statusDot.className = "w-3 h-3 rounded-full bg-emerald-500";
         renderData();
 
       } catch (err) {
-        console.error("Live API Fetch Error:", err);
-        statusText.innerText = "Error calling Live API: " + err.message;
+        console.error(err);
+        statusText.innerText = "Fetch Error: " + err.message;
         statusDot.className = "w-3 h-3 rounded-full bg-red-500";
       } finally {
         refreshIcon.classList.remove('animate-spin');
