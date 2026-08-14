@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Singapore Expressway Speed Dashboard</title>
+    
+    <!-- Leaflet CSS for Map rendering -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-color: #f8fafc;
+            --text-muted: #94a3b8;
+            --border-color: #334155;
+            --accent-green: #22c55e;
+            --accent-yellow: #eab308;
+            --accent-red: #ef4444;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        header {
+            background-color: var(--card-bg);
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .header-title h1 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #38bdf8;
+        }
+
+        .header-title p {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .controls {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        button {
+            background-color: #0284c7;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 600;
+            transition: background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: #0369a1;
+        }
+
+        .status-badge {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 9999px;
+            background-color: #334155;
+            color: var(--text-muted);
+        }
+
+        .main-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        #map {
+            flex: 1;
+            height: 100%;
+            z-index: 1;
+        }
+
+        .sidebar {
+            width: 380px;
+            background-color: var(--card-bg);
+            border-left: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            z-index: 2;
+        }
+
+        .filter-bar {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .filter-bar select {
+            width: 100%;
+            padding: 0.5rem;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            border-radius: 0.375rem;
+        }
+
+        .expressway-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0.5rem;
+        }
+
+        .expressway-card {
+            background-color: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            padding: 0.875rem;
+            margin-bottom: 0.5rem;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+
+        .expressway-card:hover {
+            border-color: #0284c7;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .card-title {
+            font-weight: 700;
+            font-size: 1rem;
+        }
+
+        .speed-badge {
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-weight: bold;
+            font-size: 0.875rem;
+        }
+
+        .speed-smooth { background-color: rgba(34, 197, 94, 0.2); color: var(--accent-green); }
+        .speed-moderate { background-color: rgba(234, 179, 8, 0.2); color: var(--accent-yellow); }
+        .speed-slow { background-color: rgba(239, 68, 68, 0.2); color: var(--accent-red); }
+
+        .card-metrics {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .legend {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: var(--card-bg);
+            padding: 10px 15px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            z-index: 1000;
+            font-size: 0.8rem;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+        }
+
+        @media (max-width: 768px) {
+            .main-container { flex-direction: column-reverse; }
+            .sidebar { width: 100%; height: 40%; }
+            #map { height: 60%; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="header-title">
+            <h1>Singapore Expressway Speeds</h1>
+            <p>LTA DataMall Real-time Traffic Monitoring</p>
+        </div>
+        <div class="controls">
+            <span id="lastUpdated" class="status-badge">Updated: Never</span>
+            <button id="refreshBtn">Refresh Data</button>
+        </div>
+    </header>
+
+    <div class="main-container">
+        <div id="map"></div>
+
+        <div class="sidebar">
+            <div class="filter-bar">
+                <select id="roadFilter">
+                    <option value="ALL">All Expressways</option>
+                </select>
+            </div>
+            <div id="expresswayList" class="expressway-list">
+                <!-- Dynamic Content Inserted Here -->
+            </div>
+        </div>
+    </div>
+
+    <div class="legend">
+        <strong style="display:block; margin-bottom:5px;">Speed Bands</strong>
+        <div class="legend-item"><div class="legend-color" style="background: var(--accent-green)"></div> > 60 km/h (Smooth)</div>
+        <div class="legend-item"><div class="legend-color" style="background: var(--accent-yellow)"></div> 30 - 60 km/h (Moderate)</div>
+        <div class="legend-item"><div class="legend-color" style="background: var(--accent-red)"></div> < 30 km/h (Congested)</div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script>
+        // Fetch static JSON updated by GitHub Actions
+        const DATA_URL = "./traffic.json";
+        const EXPRESSWAYS = ['PIE', 'ECP', 'AYE', 'CTE', 'SLE', 'TPE', 'KPE', 'BKE', 'MCE', 'NSE'];
+
+        let map;
+        let polylineGroup;
+        let trafficData = [];
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initMap();
+            populateRoadFilter();
+            fetchTrafficData();
+
+            document.getElementById('refreshBtn').addEventListener('click', fetchTrafficData);
+            document.getElementById('roadFilter').addEventListener('change', renderData);
+            
+            // Periodically check local file every 2 minutes
+            setInterval(fetchTrafficData, 120000);
+        });
+
+        function initMap() {
+            map = L.map('map').setView([1.3521, 103.8198], 12);
+
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; OpenStreetMap &copy; CARTO',
+                maxZoom: 18
+            }).addTo(map);
+
+            polylineGroup = L.layerGroup().addTo(map);
+        }
+
+        function populateRoadFilter() {
+            const filterSelect = document.getElementById('roadFilter');
+            EXPRESSWAYS.forEach(exp => {
+                const opt = document.createElement('option');
+                opt.value = exp;
+                opt.textContent = exp;
+                filterSelect.appendChild(opt);
+            });
+        }
+
+        async function fetchTrafficData() {
+            const refreshBtn = document.getElementById('refreshBtn');
+            if (refreshBtn) {
+                refreshBtn.textContent = 'Loading...';
+                refreshBtn.disabled = true;
+            }
+
+            try {
+                // Bust browser caching by appending timestamp query string
+                const response = await fetch(`${DATA_URL}?_t=${Date.now()}`);
+                if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+
+                const data = await response.json();
+                trafficData = data.value || [];
+                
+                document.getElementById('lastUpdated').textContent = `Updated: ${new Date().toLocaleTimeString()}`;
+                renderData();
+            } catch (err) {
+                console.error("Failed to load traffic data:", err);
+                alert("Could not load traffic.json. Trigger the workflow manually in GitHub Actions to generate initial data.");
+            } finally {
+                if (refreshBtn) {
+                    refreshBtn.textContent = 'Refresh Data';
+                    refreshBtn.disabled = false;
+                }
+            }
+        }
+
+        function getColorBySpeed(minSpeed, maxSpeed) {
+            const avgSpeed = (parseFloat(minSpeed) + parseFloat(maxSpeed)) / 2;
+            if (avgSpeed >= 60) return '#22c55e';
+            if (avgSpeed >= 30) return '#eab308';
+            return '#ef4444';
+        }
+
+        function getSpeedClass(minSpeed, maxSpeed) {
+            const avgSpeed = (parseFloat(minSpeed) + parseFloat(maxSpeed)) / 2;
+            if (avgSpeed >= 60) return 'speed-smooth';
+            if (avgSpeed >= 30) return 'speed-moderate';
+            return 'speed-slow';
+        }
+
+        function renderData() {
+            polylineGroup.clearLayers();
+            const listContainer = document.getElementById('expresswayList');
+            listContainer.innerHTML = '';
+
+            const selectedFilter = document.getElementById('roadFilter').value;
+
+            const filteredData = trafficData.filter(item => {
+                const isExpressway = item.RoadCategory === 'A' || EXPRESSWAYS.some(exp => item.RoadName.includes(exp));
+                if (!isExpressway) return false;
+
+                if (selectedFilter !== 'ALL') {
+                    return item.RoadName.includes(selectedFilter);
+                }
+                return true;
+            });
+
+            if (filteredData.length === 0) {
+                listContainer.innerHTML = `<div style="padding: 1rem; color: var(--text-muted);">No expressway data currently loaded.</div>`;
+                return;
+            }
+
+            filteredData.forEach(item => {
+                const startLat = parseFloat(item.StartLatitude);
+                const startLng = parseFloat(item.StartLongitude);
+                const endLat = parseFloat(item.EndLatitude);
+                const endLng = parseFloat(item.EndLongitude);
+
+                const color = getColorBySpeed(item.MinimumSpeed, item.MaximumSpeed);
+                const speedClass = getSpeedClass(item.MinimumSpeed, item.MaximumSpeed);
+
+                if (startLat && startLng && endLat && endLng) {
+                    const polyline = L.polyline([[startLat, startLng], [endLat, endLng]], {
+                        color: color,
+                        weight: 5,
+                        opacity: 0.8
+                    });
+
+                    polyline.bindPopup(`
+                        <strong>${item.RoadName}</strong><br/>
+                        Speed Range: ${item.MinimumSpeed} - ${item.MaximumSpeed} km/h<br/>
+                        Speed Band: ${item.SpeedBand}
+                    `);
+
+                    polylineGroup.addLayer(polyline);
+                }
+
+                const card = document.createElement('div');
+                card.className = 'expressway-card';
+                card.innerHTML = `
+                    <div class="card-header">
+                        <span class="card-title">${item.RoadName}</span>
+                        <span class="speed-badge ${speedClass}">${item.MinimumSpeed}-${item.MaximumSpeed} km/h</span>
+                    </div>
+                    <div class="card-metrics">
+                        <span>Speed Band: ${item.SpeedBand}</span>
+                        <span>Link ID: ${item.LinkID}</span>
+                    </div>
+                `;
+
+                card.addEventListener('click', () => {
+                    if (startLat && startLng) {
+                        map.flyTo([startLat, startLng], 15);
+                    }
+                });
+
+                listContainer.appendChild(card);
+            });
+        }
+    </script>
+</body>
+</html>
