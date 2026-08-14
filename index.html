@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Singapore Expressway Speed Dashboard</title>
+    <title>Singapore Road Speed Dashboard</title>
     
     <!-- Leaflet CSS for Map rendering -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -151,14 +151,14 @@
 
         .card-title {
             font-weight: 700;
-            font-size: 1rem;
+            font-size: 0.9rem;
         }
 
         .speed-badge {
             padding: 0.25rem 0.5rem;
             border-radius: 0.25rem;
             font-weight: bold;
-            font-size: 0.875rem;
+            font-size: 0.8rem;
         }
 
         .speed-smooth { background-color: rgba(34, 197, 94, 0.2); color: var(--accent-green); }
@@ -168,7 +168,7 @@
         .card-metrics {
             display: flex;
             justify-content: space-between;
-            font-size: 0.8rem;
+            font-size: 0.75rem;
             color: var(--text-muted);
         }
 
@@ -208,8 +208,8 @@
 
     <header>
         <div class="header-title">
-            <h1>Singapore Expressway Speeds</h1>
-            <p>LTA DataMall Real-time Traffic Monitoring</p>
+            <h1>Singapore Traffic Speeds</h1>
+            <p>LTA DataMall Speed Bands Dashboard</p>
         </div>
         <div class="controls">
             <span id="lastUpdated" class="status-badge">Updated: Never</span>
@@ -223,7 +223,7 @@
         <div class="sidebar">
             <div class="filter-bar">
                 <select id="roadFilter">
-                    <option value="ALL">All Expressways</option>
+                    <option value="ALL">All Loaded Roads</option>
                 </select>
             </div>
             <div id="expresswayList" class="expressway-list">
@@ -234,18 +234,16 @@
 
     <div class="legend">
         <strong style="display:block; margin-bottom:5px;">Speed Bands</strong>
-        <div class="legend-item"><div class="legend-color" style="background: var(--accent-green)"></div> > 60 km/h (Smooth)</div>
-        <div class="legend-item"><div class="legend-color" style="background: var(--accent-yellow)"></div> 30 - 60 km/h (Moderate)</div>
-        <div class="legend-item"><div class="legend-color" style="background: var(--accent-red)"></div> < 30 km/h (Congested)</div>
+        <div class="legend-item"><div class="legend-color" style="background: var(--accent-green)"></div> &ge; 40 km/h (Smooth)</div>
+        <div class="legend-item"><div class="legend-color" style="background: var(--accent-yellow)"></div> 20 - 39 km/h (Moderate)</div>
+        <div class="legend-item"><div class="legend-color" style="background: var(--accent-red)"></div> &lt; 20 km/h (Congested)</div>
     </div>
 
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <script>
-        // Fetch static JSON updated by GitHub Actions
         const DATA_URL = "./traffic.json";
-        const EXPRESSWAYS = ['PIE', 'ECP', 'AYE', 'CTE', 'SLE', 'TPE', 'KPE', 'BKE', 'MCE', 'NSE'];
 
         let map;
         let polylineGroup;
@@ -253,7 +251,6 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             initMap();
-            populateRoadFilter();
             fetchTrafficData();
 
             document.getElementById('refreshBtn').addEventListener('click', fetchTrafficData);
@@ -264,7 +261,8 @@
         });
 
         function initMap() {
-            map = L.map('map').setView([1.3521, 103.8198], 12);
+            // Default center around Singapore River Valley / Orchard area based on dataset
+            map = L.map('map').setView([1.295, 103.839], 14);
 
             L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
                 attribution: '&copy; OpenStreetMap &copy; CARTO',
@@ -276,11 +274,17 @@
 
         function populateRoadFilter() {
             const filterSelect = document.getElementById('roadFilter');
-            EXPRESSWAYS.forEach(exp => {
-                const opt = document.createElement('option');
-                opt.value = exp;
-                opt.textContent = exp;
-                filterSelect.appendChild(opt);
+            filterSelect.innerHTML = '<option value="ALL">All Loaded Roads</option>';
+
+            // Dynamically build filter list based on roads available in JSON
+            const uniqueRoads = [...new Set(trafficData.map(item => item.RoadName))].sort();
+            uniqueRoads.forEach(road => {
+                if(road) {
+                    const opt = document.createElement('option');
+                    opt.value = road;
+                    opt.textContent = road;
+                    filterSelect.appendChild(opt);
+                }
             });
         }
 
@@ -292,18 +296,20 @@
             }
 
             try {
-                // Bust browser caching by appending timestamp query string
                 const response = await fetch(`${DATA_URL}?_t=${Date.now()}`);
                 if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
 
                 const data = await response.json();
                 trafficData = data.value || [];
                 
-                document.getElementById('lastUpdated').textContent = `Updated: ${new Date().toLocaleTimeString()}`;
+                document.getElementById('lastUpdated').textContent = data.lastUpdatedTime ? 
+                    `LTA Time: ${data.lastUpdatedTime}` : `Updated: ${new Date().toLocaleTimeString()}`;
+                
+                populateRoadFilter();
                 renderData();
             } catch (err) {
                 console.error("Failed to load traffic data:", err);
-                alert("Could not load traffic.json. Trigger the workflow manually in GitHub Actions to generate initial data.");
+                alert("Could not load traffic.json file.");
             } finally {
                 if (refreshBtn) {
                     refreshBtn.textContent = 'Refresh Data';
@@ -314,15 +320,15 @@
 
         function getColorBySpeed(minSpeed, maxSpeed) {
             const avgSpeed = (parseFloat(minSpeed) + parseFloat(maxSpeed)) / 2;
-            if (avgSpeed >= 60) return '#22c55e';
-            if (avgSpeed >= 30) return '#eab308';
-            return '#ef4444';
+            if (avgSpeed >= 40) return '#22c55e'; // Green
+            if (avgSpeed >= 20) return '#eab308'; // Yellow
+            return '#ef4444';                    // Red
         }
 
         function getSpeedClass(minSpeed, maxSpeed) {
             const avgSpeed = (parseFloat(minSpeed) + parseFloat(maxSpeed)) / 2;
-            if (avgSpeed >= 60) return 'speed-smooth';
-            if (avgSpeed >= 30) return 'speed-moderate';
+            if (avgSpeed >= 40) return 'speed-smooth';
+            if (avgSpeed >= 20) return 'speed-moderate';
             return 'speed-slow';
         }
 
@@ -334,40 +340,46 @@
             const selectedFilter = document.getElementById('roadFilter').value;
 
             const filteredData = trafficData.filter(item => {
-                const isExpressway = item.RoadCategory === 'A' || EXPRESSWAYS.some(exp => item.RoadName.includes(exp));
-                if (!isExpressway) return false;
-
                 if (selectedFilter !== 'ALL') {
-                    return item.RoadName.includes(selectedFilter);
+                    return item.RoadName === selectedFilter;
                 }
                 return true;
             });
 
             if (filteredData.length === 0) {
-                listContainer.innerHTML = `<div style="padding: 1rem; color: var(--text-muted);">No expressway data currently loaded.</div>`;
+                listContainer.innerHTML = `<div style="padding: 1rem; color: var(--text-muted);">No road segments available.</div>`;
                 return;
             }
 
+            // Adjust map view bounds to automatically fit loaded road coordinates
+            const bounds = [];
+
             filteredData.forEach(item => {
-                const startLat = parseFloat(item.StartLatitude);
-                const startLng = parseFloat(item.StartLongitude);
-                const endLat = parseFloat(item.EndLatitude);
-                const endLng = parseFloat(item.EndLongitude);
+                const startLat = parseFloat(item.StartLat);
+                const startLng = parseFloat(item.StartLon);
+                const endLat = parseFloat(item.EndLat);
+                const endLng = parseFloat(item.EndLon);
 
-                const color = getColorBySpeed(item.MinimumSpeed, item.MaximumSpeed);
-                const speedClass = getSpeedClass(item.MinimumSpeed, item.MaximumSpeed);
+                const minSpeed = item.MinimumSpeed || '0';
+                const maxSpeed = item.MaximumSpeed || '0';
 
-                if (startLat && startLng && endLat && endLng) {
+                const color = getColorBySpeed(minSpeed, maxSpeed);
+                const speedClass = getSpeedClass(minSpeed, maxSpeed);
+
+                if (!isNaN(startLat) && !isNaN(startLng) && !isNaN(endLat) && !isNaN(endLng)) {
+                    bounds.push([startLat, startLng]);
+                    bounds.push([endLat, endLng]);
+
                     const polyline = L.polyline([[startLat, startLng], [endLat, endLng]], {
                         color: color,
-                        weight: 5,
-                        opacity: 0.8
+                        weight: 6,
+                        opacity: 0.85
                     });
 
                     polyline.bindPopup(`
                         <strong>${item.RoadName}</strong><br/>
-                        Speed Range: ${item.MinimumSpeed} - ${item.MaximumSpeed} km/h<br/>
-                        Speed Band: ${item.SpeedBand}
+                        Speed Range: ${minSpeed} - ${maxSpeed} km/h<br/>
+                        Speed Band: ${item.SpeedBand} (Cat ${item.RoadCategory})
                     `);
 
                     polylineGroup.addLayer(polyline);
@@ -378,7 +390,7 @@
                 card.innerHTML = `
                     <div class="card-header">
                         <span class="card-title">${item.RoadName}</span>
-                        <span class="speed-badge ${speedClass}">${item.MinimumSpeed}-${item.MaximumSpeed} km/h</span>
+                        <span class="speed-badge ${speedClass}">${minSpeed}-${maxSpeed} km/h</span>
                     </div>
                     <div class="card-metrics">
                         <span>Speed Band: ${item.SpeedBand}</span>
@@ -387,13 +399,18 @@
                 `;
 
                 card.addEventListener('click', () => {
-                    if (startLat && startLng) {
-                        map.flyTo([startLat, startLng], 15);
+                    if (!isNaN(startLat) && !isNaN(startLng)) {
+                        map.flyTo([startLat, startLng], 17);
                     }
                 });
 
                 listContainer.appendChild(card);
             });
+
+            // Automatically fit map view around current batch of road segments
+            if (bounds.length > 0 && selectedFilter === 'ALL') {
+                map.fitBounds(bounds, { padding: [30, 30] });
+            }
         }
     </script>
 </body>
