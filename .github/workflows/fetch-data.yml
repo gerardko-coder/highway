@@ -16,6 +16,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: main # Always checkout the latest commit on main
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -113,3 +115,4 @@ jobs:
         with:
           commit_message: "auto: update traffic data [skip ci]"
           file_pattern: "traffic.json"
+          skip_fetch: false
