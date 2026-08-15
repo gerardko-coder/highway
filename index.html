@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Nearby Major Road Speeds (4km Radius)</title>
+    <title>Nearby Traffic Delays (4km Radius)</title>
     
     <!-- Leaflet CSS for Map rendering -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -15,7 +15,6 @@
             --text-color: #0f172a;
             --text-muted: #64748b;
             --border-color: #cbd5e1;
-            --accent-green: #16a34a;
             --accent-yellow: #ca8a04;
             --accent-red: #dc2626;
             --accent-blue: #0284c7;
@@ -197,7 +196,6 @@
             font-size: 0.75rem;
         }
 
-        .speed-smooth { background-color: rgba(22, 163, 74, 0.15); color: var(--accent-green); }
         .speed-moderate { background-color: rgba(202, 138, 4, 0.15); color: var(--accent-yellow); }
         .speed-slow { background-color: rgba(220, 38, 38, 0.15); color: var(--accent-red); }
 
@@ -236,7 +234,7 @@
             border-radius: 2px;
         }
 
-        /* High Visibility Map Popups & Tooltips */
+        /* High Visibility Map Popups */
         .leaflet-popup-content-wrapper {
             background-color: #ffffff !important;
             color: #0f172a !important;
@@ -335,8 +333,8 @@
 
     <header>
         <div class="header-title">
-            <h1>Nearby Arterials &amp; Expressways</h1>
-            <p>LTA Speed Bands &bull; 4km Vicinity</p>
+            <h1>Nearby Slowdowns &amp; Delays</h1>
+            <p>LTA Speed Bands &bull; 4km Vicinity (Slowdowns Only)</p>
         </div>
         <div class="controls">
             <span id="lastUpdated" class="status-badge">Updated: Never</span>
@@ -355,9 +353,9 @@
                 <div class="drawer-bar"></div>
             </div>
             <div class="filter-bar">
-                <div id="filterInfo" class="filter-info">Showing main roads within 4km...</div>
+                <div id="filterInfo" class="filter-info">Showing traffic delays within 4km...</div>
                 <select id="roadFilter">
-                    <option value="ALL">All Major Roads (4km)</option>
+                    <option value="ALL">All Delayed Roads (4km)</option>
                 </select>
             </div>
             <div id="expresswayList" class="expressway-list">
@@ -367,8 +365,7 @@
     </div>
 
     <div class="legend">
-        <strong style="display:block; margin-bottom:4px;">Speed Bands</strong>
-        <div class="legend-item"><div class="legend-color" style="background: var(--accent-green)"></div> &ge; 40 km/h (Smooth)</div>
+        <strong style="display:block; margin-bottom:4px;">Traffic Delays</strong>
         <div class="legend-item"><div class="legend-color" style="background: var(--accent-yellow)"></div> 20 - 39 km/h (Moderate)</div>
         <div class="legend-item"><div class="legend-color" style="background: var(--accent-red)"></div> &lt; 20 km/h (Congested)</div>
     </div>
@@ -532,7 +529,7 @@
         function populateRoadFilter(nearbyItems) {
             const filterSelect = document.getElementById('roadFilter');
             const selectedVal = filterSelect.value;
-            filterSelect.innerHTML = '<option value="ALL">All Major Roads (4km)</option>';
+            filterSelect.innerHTML = '<option value="ALL">All Delayed Roads (4km)</option>';
 
             const uniqueRoads = [...new Set(nearbyItems.map(item => item.RoadName).filter(Boolean))].sort();
             uniqueRoads.forEach(road => {
@@ -549,14 +546,12 @@
 
         function getColorBySpeed(minSpeed, maxSpeed) {
             const avgSpeed = (parseFloat(minSpeed) + parseFloat(maxSpeed)) / 2;
-            if (avgSpeed >= 40) return '#16a34a';
             if (avgSpeed >= 20) return '#ca8a04';
             return '#dc2626';
         }
 
         function getSpeedClass(minSpeed, maxSpeed) {
             const avgSpeed = (parseFloat(minSpeed) + parseFloat(maxSpeed)) / 2;
-            if (avgSpeed >= 40) return 'speed-smooth';
             if (avgSpeed >= 20) return 'speed-moderate';
             return 'speed-slow';
         }
@@ -576,12 +571,23 @@
 
                 if (isNaN(startLat) || isNaN(startLng)) return false;
 
+                // 1. Filter out "green" smooth roads (average speed >= 40 km/h)
+                const minSpeed = parseFloat(item.MinimumSpeed) || 0;
+                const maxSpeed = parseFloat(item.MaximumSpeed) || 0;
+                const avgSpeed = (minSpeed + maxSpeed) / 2;
+
+                if (avgSpeed >= 40) {
+                    return false; // Skip smooth traffic
+                }
+
+                // 2. Must be a major road category
                 const roadNameUpper = (item.RoadName || '').toUpperCase();
                 const isMajorCategory = MAJOR_ROAD_CATEGORIES.includes(String(item.RoadCategory)) ||
                                         EXPRESSWAY_KEYWORDS.some(kw => roadNameUpper.includes(kw));
 
                 if (!isMajorCategory) return false;
 
+                // 3. Must be within 4km radius
                 const distanceKm = calculateDistanceKm(
                     currentUserPos.lat, currentUserPos.lng,
                     startLat, startLng
@@ -589,6 +595,7 @@
 
                 if (distanceKm > RADIUS_KM) return false;
 
+                // 4. Ignore segments shorter than 100m
                 if (!isNaN(endLat) && !isNaN(endLng)) {
                     const segmentLengthMeters = getSegmentLengthMeters(startLat, startLng, endLat, endLng);
                     if (segmentLengthMeters < 100) {
@@ -624,10 +631,10 @@
             });
 
             document.getElementById('filterInfo').textContent = 
-                `Found ${nearbyItems.length} major road segments within 4km`;
+                `Found ${nearbyItems.length} traffic delays within 4km`;
 
             if (filteredData.length === 0) {
-                listContainer.innerHTML = `<div style="padding: 1rem; color: var(--text-muted);">No major road segments found within 4km.</div>`;
+                listContainer.innerHTML = `<div style="padding: 1rem; color: var(--text-muted); font-size: 0.85rem;">🎉 Clear roads! No major traffic slowdowns within 4km.</div>`;
                 return;
             }
 
@@ -644,11 +651,10 @@
                 const speedClass = getSpeedClass(minSpeed, maxSpeed);
 
                 if (!isNaN(startLat) && !isNaN(startLng) && !isNaN(endLat) && !isNaN(endLng)) {
-                    // Thinner line weight (3.5px) for clear map background visibility
                     const polyline = L.polyline([[startLat, startLng], [endLat, endLng]], {
                         color: color,
                         weight: 3.5,
-                        opacity: 0.8
+                        opacity: 0.85
                     });
 
                     polyline.bindPopup(`
