@@ -332,7 +332,7 @@
     <header>
         <div class="header-title">
             <h1>Nearby Traffic Delays</h1>
-            <p>LTA Speed Bands &bull; 10km Vicinity (Slowdowns Only)</p>
+            <p>LTA Speed Bands &bull; 10km Vicinity (Severe Delays Listed)</p>
         </div>
         <div class="controls">
             <span id="lastUpdated" class="status-badge">Updated: Never</span>
@@ -351,9 +351,9 @@
                 <div class="drawer-bar"></div>
             </div>
             <div class="filter-bar">
-                <div id="filterInfo" class="filter-info">Showing traffic delays within 10km...</div>
+                <div id="filterInfo" class="filter-info">Showing congested roads within 10km...</div>
                 <select id="roadFilter">
-                    <option value="ALL">All Delayed Roads (10km)</option>
+                    <option value="ALL">All Congested Roads (&lt;20km/h)</option>
                 </select>
             </div>
             <div id="expresswayList" class="expressway-list">
@@ -524,12 +524,12 @@
             }
         }
 
-        function populateRoadFilter(nearbyItems) {
+        function populateRoadFilter(redItems) {
             const filterSelect = document.getElementById('roadFilter');
             const selectedVal = filterSelect.value;
-            filterSelect.innerHTML = '<option value="ALL">All Delayed Roads (10km)</option>';
+            filterSelect.innerHTML = '<option value="ALL">All Congested Roads (&lt;20km/h)</option>';
 
-            const uniqueRoads = [...new Set(nearbyItems.map(item => item.RoadName).filter(Boolean))].sort();
+            const uniqueRoads = [...new Set(redItems.map(item => item.RoadName).filter(Boolean))].sort();
             uniqueRoads.forEach(road => {
                 const opt = document.createElement('option');
                 opt.value = road;
@@ -604,7 +604,6 @@
 
                 if (distanceKm > RADIUS_KM) return false;
 
-                // Attach calculated distance for sorting later
                 item._distanceKm = distanceKm;
 
                 // 6. Ignore short segments (<50m for delayed stretches)
@@ -618,49 +617,19 @@
                 return true;
             });
 
-            populateRoadFilter(nearbyItems);
+            // Subset for SIDEBAR ONLY: Filter down to RED roads (<20 km/h)
+            const redItems = nearbyItems.filter(item => {
+                const minSpeed = parseFloat(item.MinimumSpeed) || 0;
+                const maxSpeed = parseFloat(item.MaximumSpeed) || 0;
+                return ((minSpeed + maxSpeed) / 2) < 20;
+            });
+
+            populateRoadFilter(redItems);
 
             const selectedFilter = document.getElementById('roadFilter').value;
 
-            let filteredData = nearbyItems.filter(item => {
-                if (selectedFilter !== 'ALL') {
-                    return item.RoadName === selectedFilter;
-                }
-                return true;
-            });
-
-            // REVISED SORTING: Closest distance primary, then lowest SpeedBand, then alphabetical
-            filteredData.sort((a, b) => {
-                const distA = a._distanceKm || 0;
-                const distB = b._distanceKm || 0;
-
-                // 1. Primary Sort: Distance (closest first)
-                if (Math.abs(distA - distB) > 0.05) { // 50m tolerance for distance bucket
-                    return distA - distB;
-                }
-
-                // 2. Secondary Sort: Ascending SpeedBand (lowest speed band first)
-                const speedBandA = parseInt(a.SpeedBand, 10) || 0;
-                const speedBandB = parseInt(b.SpeedBand, 10) || 0;
-                if (speedBandA !== speedBandB) {
-                    return speedBandA - speedBandB;
-                }
-
-                // 3. Tertiary Sort: Alphabetical order by RoadName
-                const nameA = (a.RoadName || '').toUpperCase();
-                const nameB = (b.RoadName || '').toUpperCase();
-                return nameA.localeCompare(nameB);
-            });
-
-            document.getElementById('filterInfo').textContent = 
-                `Found ${nearbyItems.length} traffic delays within 10km`;
-
-            if (filteredData.length === 0) {
-                listContainer.innerHTML = `<div style="padding: 1rem; color: var(--text-muted); font-size: 0.85rem;">🎉 Clear roads! No major traffic slowdowns within 10km.</div>`;
-                return;
-            }
-
-            filteredData.forEach(item => {
+            // Render ALL polylines to MAP (Orange + Red)
+            nearbyItems.forEach(item => {
                 const startLat = parseFloat(item.StartLat);
                 const startLng = parseFloat(item.StartLon);
                 const endLat = parseFloat(item.EndLat);
@@ -668,9 +637,7 @@
 
                 const minSpeed = item.MinimumSpeed || '0';
                 const maxSpeed = item.MaximumSpeed || '0';
-
                 const color = getColorBySpeed(minSpeed, maxSpeed);
-                const speedClass = getSpeedClass(minSpeed, maxSpeed);
                 const distText = item._distanceKm ? `${item._distanceKm.toFixed(1)} km away` : '';
 
                 if (!isNaN(startLat) && !isNaN(startLng) && !isNaN(endLat) && !isNaN(endLng)) {
@@ -691,6 +658,52 @@
 
                     polylineGroup.addLayer(polyline);
                 }
+            });
+
+            // Filter SIDEBAR LIST: Red items only, applied to dropdown selection
+            let sidebarData = redItems.filter(item => {
+                if (selectedFilter !== 'ALL') {
+                    return item.RoadName === selectedFilter;
+                }
+                return true;
+            });
+
+            // Sort sidebar listing (Closest distance primary, lowest speed band secondary, name tertiary)
+            sidebarData.sort((a, b) => {
+                const distA = a._distanceKm || 0;
+                const distB = b._distanceKm || 0;
+
+                if (Math.abs(distA - distB) > 0.05) {
+                    return distA - distB;
+                }
+
+                const speedBandA = parseInt(a.SpeedBand, 10) || 0;
+                const speedBandB = parseInt(b.SpeedBand, 10) || 0;
+                if (speedBandA !== speedBandB) {
+                    return speedBandA - speedBandB;
+                }
+
+                const nameA = (a.RoadName || '').toUpperCase();
+                const nameB = (b.RoadName || '').toUpperCase();
+                return nameA.localeCompare(nameB);
+            });
+
+            document.getElementById('filterInfo').textContent = 
+                `Found ${redItems.length} congested roads (<20km/h) within 10km`;
+
+            if (sidebarData.length === 0) {
+                listContainer.innerHTML = `<div style="padding: 1rem; color: var(--text-muted); font-size: 0.85rem;">🎉 No heavy jams (<20km/h) within 10km.</div>`;
+                return;
+            }
+
+            // Render SIDEBAR CARDS (Red items only)
+            sidebarData.forEach(item => {
+                const startLat = parseFloat(item.StartLat);
+                const startLng = parseFloat(item.StartLon);
+                const minSpeed = item.MinimumSpeed || '0';
+                const maxSpeed = item.MaximumSpeed || '0';
+                const speedClass = getSpeedClass(minSpeed, maxSpeed);
+                const distText = item._distanceKm ? `${item._distanceKm.toFixed(1)} km away` : '';
 
                 const card = document.createElement('div');
                 card.className = 'expressway-card';
