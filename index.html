@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Nearby Road Speeds (5km Radius)</title>
+    <title>Nearby Major Road Speeds (4km Radius)</title>
     
     <!-- Leaflet CSS for Map rendering -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -322,13 +322,13 @@
 
     <header>
         <div class="header-title">
-            <h1>Nearby Traffic Speeds</h1>
-            <p>LTA Speed Bands &bull; 5km Vicinity</p>
+            <h1>Nearby Arterials &amp; Expressways</h1>
+            <p>LTA Speed Bands &bull; 4km Vicinity</p>
         </div>
         <div class="controls">
             <span id="lastUpdated" class="status-badge">Updated: Never</span>
             <button id="locateBtn" class="btn-icon" title="Find My Location">
-                📍 <span class="btn-text">Recenter (5km)</span>
+                📍 <span class="btn-text">Recenter (4km)</span>
             </button>
             <button id="refreshBtn">🔄 Refresh</button>
         </div>
@@ -342,9 +342,9 @@
                 <div class="drawer-bar"></div>
             </div>
             <div class="filter-bar">
-                <div id="filterInfo" class="filter-info">Showing roads within 5km...</div>
+                <div id="filterInfo" class="filter-info">Showing main roads within 4km...</div>
                 <select id="roadFilter">
-                    <option value="ALL">All Nearby Roads</option>
+                    <option value="ALL">All Major Roads (4km)</option>
                 </select>
             </div>
             <div id="expresswayList" class="expressway-list">
@@ -365,9 +365,15 @@
 
     <script>
         const DATA_URL = "./traffic.json";
-        const RADIUS_KM = 5.0; // Radius filter threshold in kilometers
+        const RADIUS_KM = 4.0; // Filter threshold set to 4 kilometers
 
-        // Default Singapore Center (Used if user denies GPS location permission)
+        // Only include major categories: 'A' (Expressways), '1' (Category 1 Arterial), '2' (Category 2 Major Arterial), '3' (Category 3 Minor Arterial)
+        const MAJOR_ROAD_CATEGORIES = ['A', '1', '2', '3'];
+
+        // Known Expressways acronym list for explicit matching
+        const EXPRESSWAY_KEYWORDS = ['PIE', 'ECP', 'AYE', 'CTE', 'SLE', 'TPE', 'KPE', 'BKE', 'MCE', 'NSE', 'EXPRESSWAY'];
+
+        // Default Central Singapore Location
         const DEFAULT_LOCATION = { lat: 1.3521, lng: 103.8198 };
 
         let map;
@@ -385,7 +391,6 @@
             document.getElementById('locateBtn').addEventListener('click', getUserLocation);
             document.getElementById('roadFilter').addEventListener('change', renderData);
             
-            // Mobile Drawer handle listener
             document.getElementById('drawerHandle').addEventListener('click', () => {
                 document.getElementById('sidebar').classList.toggle('expanded');
             });
@@ -406,9 +411,8 @@
             polylineGroup = L.layerGroup().addTo(map);
         }
 
-        // Haversine formula to compute distance between two GPS coordinates in kilometers
         function calculateDistanceKm(lat1, lon1, lat2, lon2) {
-            const R = 6371; // Earth radius in km
+            const R = 6371;
             const dLat = (lat2 - lat1) * Math.PI / 180;
             const dLon = (lon2 - lon1) * Math.PI / 180;
             const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
@@ -420,7 +424,6 @@
 
         function getUserLocation() {
             if (!navigator.geolocation) {
-                console.warn("Geolocation not supported. Defaulting to Central Singapore.");
                 currentUserPos = DEFAULT_LOCATION;
                 updateUserMapLocation();
                 renderData();
@@ -440,14 +443,13 @@
                     updateUserMapLocation();
                     renderData();
 
-                    locateBtn.innerHTML = '📍 <span class="btn-text">Recenter (5km)</span>';
+                    locateBtn.innerHTML = '📍 <span class="btn-text">Recenter (4km)</span>';
                 },
                 (error) => {
-                    console.warn("Location access denied or failed. Using default location.", error);
                     currentUserPos = DEFAULT_LOCATION;
                     updateUserMapLocation();
                     renderData();
-                    locateBtn.innerHTML = '📍 <span class="btn-text">Recenter (5km)</span>';
+                    locateBtn.innerHTML = '📍 <span class="btn-text">Recenter (4km)</span>';
                 },
                 { enableHighAccuracy: true, timeout: 8000 }
             );
@@ -456,11 +458,10 @@
         function updateUserMapLocation() {
             if (!currentUserPos) return;
 
-            // Remove existing user indicators
             if (userMarker) map.removeLayer(userMarker);
             if (userCircle) map.removeLayer(userCircle);
 
-            // Draw 5km radius visual circle around user
+            // Draw 4km radius circle around user location
             userCircle = L.circle([currentUserPos.lat, currentUserPos.lng], {
                 radius: RADIUS_KM * 1000,
                 color: '#0284c7',
@@ -470,7 +471,6 @@
                 dashArray: '4, 4'
             }).addTo(map);
 
-            // Draw pulsing user marker
             const userIcon = L.divIcon({
                 className: 'user-location-marker',
                 iconSize: [18, 18],
@@ -480,8 +480,7 @@
             userMarker = L.marker([currentUserPos.lat, currentUserPos.lng], { icon: userIcon }).addTo(map);
             userMarker.bindPopup("<strong>You are here</strong>");
 
-            // Fly map to user location
-            map.flyTo([currentUserPos.lat, currentUserPos.lng], 13);
+            map.flyTo([currentUserPos.lat, currentUserPos.lng], 13.5);
         }
 
         async function fetchTrafficData() {
@@ -521,7 +520,7 @@
         function populateRoadFilter(nearbyItems) {
             const filterSelect = document.getElementById('roadFilter');
             const selectedVal = filterSelect.value;
-            filterSelect.innerHTML = '<option value="ALL">All Nearby Roads</option>';
+            filterSelect.innerHTML = '<option value="ALL">All Major Roads (4km)</option>';
 
             const uniqueRoads = [...new Set(nearbyItems.map(item => item.RoadName).filter(Boolean))].sort();
             uniqueRoads.forEach(road => {
@@ -557,12 +556,18 @@
 
             if (!currentUserPos) return;
 
-            // Step 1: Filter full dataset to segments within 5km radius of user
+            // Filter data for BOTH 4km Radius AND Major Road Categories (filtering out minor estate roads)
             const nearbyItems = trafficData.filter(item => {
                 const startLat = parseFloat(item.StartLat);
                 const startLng = parseFloat(item.StartLon);
 
                 if (isNaN(startLat) || isNaN(startLng)) return false;
+
+                const roadNameUpper = (item.RoadName || '').toUpperCase();
+                const isMajorCategory = MAJOR_ROAD_CATEGORIES.includes(String(item.RoadCategory)) ||
+                                        EXPRESSWAY_KEYWORDS.some(kw => roadNameUpper.includes(kw));
+
+                if (!isMajorCategory) return false;
 
                 const distanceKm = calculateDistanceKm(
                     currentUserPos.lat, currentUserPos.lng,
@@ -576,7 +581,6 @@
 
             const selectedFilter = document.getElementById('roadFilter').value;
 
-            // Step 2: Apply dropdown selection filter
             const filteredData = nearbyItems.filter(item => {
                 if (selectedFilter !== 'ALL') {
                     return item.RoadName === selectedFilter;
@@ -585,10 +589,10 @@
             });
 
             document.getElementById('filterInfo').textContent = 
-                `Found ${nearbyItems.length} segments within 5km radius`;
+                `Found ${nearbyItems.length} major road segments within 4km`;
 
             if (filteredData.length === 0) {
-                listContainer.innerHTML = `<div style="padding: 1rem; color: var(--text-muted);">No road segments found within 5km.</div>`;
+                listContainer.innerHTML = `<div style="padding: 1rem; color: var(--text-muted);">No major road segments found within 4km.</div>`;
                 return;
             }
 
@@ -614,7 +618,7 @@
                     polyline.bindPopup(`
                         <strong>${item.RoadName}</strong><br/>
                         Speed: ${minSpeed} - ${maxSpeed} km/h<br/>
-                        Speed Band: ${item.SpeedBand}
+                        Speed Band: ${item.SpeedBand} (Cat ${item.RoadCategory})
                     `);
 
                     polylineGroup.addLayer(polyline);
@@ -629,7 +633,7 @@
                     </div>
                     <div class="card-metrics">
                         <span>Speed Band: ${item.SpeedBand}</span>
-                        <span>Link ID: ${item.LinkID}</span>
+                        <span>Category: ${item.RoadCategory}</span>
                     </div>
                 `;
 
