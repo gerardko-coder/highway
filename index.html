@@ -569,9 +569,9 @@
 
                 if (isNaN(startLat) || isNaN(startLng)) return false;
 
-                // 1. Explicitly EXCLUDE Category 5 roads
+                // 1. Explicitly EXCLUDE Categories 4 and 5
                 const categoryStr = String(item.RoadCategory || '').trim().toUpperCase();
-                if (categoryStr.startsWith('5')) {
+                if (categoryStr.startsWith('4') || categoryStr.startsWith('5')) {
                     return false;
                 }
 
@@ -584,13 +584,12 @@
                     return false;
                 }
 
-                // 3. Remove "Moderate" (20–39 km/h) speeds for Category 3 and 4 roads
-                const isCat3or4 = categoryStr === '3' || categoryStr === '4';
-                if (isCat3or4 && avgSpeed >= 20 && avgSpeed < 40) {
-                    return false; // Skip moderate slowdowns on minor roads
+                // 3. Remove "Moderate" (20–39 km/h) speeds for Category 3 roads
+                if (categoryStr === '3' && avgSpeed >= 20 && avgSpeed < 40) {
+                    return false;
                 }
 
-                // 4. Must match category whitelist or expressway keywords
+                // 4. Must match category whitelist (A, 1, 2, 3) or expressway keywords
                 const roadNameUpper = (item.RoadName || '').toUpperCase();
                 const isMajorCategory = MAJOR_ROAD_CATEGORIES.includes(categoryStr) ||
                                         EXPRESSWAY_KEYWORDS.some(kw => roadNameUpper.includes(kw));
@@ -604,6 +603,9 @@
                 );
 
                 if (distanceKm > RADIUS_KM) return false;
+
+                // Attach calculated distance for sorting later
+                item._distanceKm = distanceKm;
 
                 // 6. Ignore short segments (<50m for delayed stretches)
                 if (!isNaN(endLat) && !isNaN(endLng)) {
@@ -627,14 +629,24 @@
                 return true;
             });
 
+            // REVISED SORTING: Closest distance primary, then lowest SpeedBand, then alphabetical
             filteredData.sort((a, b) => {
+                const distA = a._distanceKm || 0;
+                const distB = b._distanceKm || 0;
+
+                // 1. Primary Sort: Distance (closest first)
+                if (Math.abs(distA - distB) > 0.05) { // 50m tolerance for distance bucket
+                    return distA - distB;
+                }
+
+                // 2. Secondary Sort: Ascending SpeedBand (lowest speed band first)
                 const speedBandA = parseInt(a.SpeedBand, 10) || 0;
                 const speedBandB = parseInt(b.SpeedBand, 10) || 0;
-
                 if (speedBandA !== speedBandB) {
                     return speedBandA - speedBandB;
                 }
 
+                // 3. Tertiary Sort: Alphabetical order by RoadName
                 const nameA = (a.RoadName || '').toUpperCase();
                 const nameB = (b.RoadName || '').toUpperCase();
                 return nameA.localeCompare(nameB);
@@ -659,6 +671,7 @@
 
                 const color = getColorBySpeed(minSpeed, maxSpeed);
                 const speedClass = getSpeedClass(minSpeed, maxSpeed);
+                const distText = item._distanceKm ? `${item._distanceKm.toFixed(1)} km away` : '';
 
                 if (!isNaN(startLat) && !isNaN(startLng) && !isNaN(endLat) && !isNaN(endLng)) {
                     const polyline = L.polyline([[startLat, startLng], [endLat, endLng]], {
@@ -671,7 +684,8 @@
                         <div style="font-size:0.9rem;">
                             <strong>${item.RoadName}</strong><br/>
                             Speed: <strong>${minSpeed} - ${maxSpeed} km/h</strong><br/>
-                            Speed Band: ${item.SpeedBand} (Category ${item.RoadCategory})
+                            Speed Band: ${item.SpeedBand} (Category ${item.RoadCategory})<br/>
+                            <span style="color: #64748b; font-size: 0.75rem;">${distText}</span>
                         </div>
                     `);
 
@@ -686,8 +700,8 @@
                         <span class="speed-badge ${speedClass}">${minSpeed}-${maxSpeed} km/h</span>
                     </div>
                     <div class="card-metrics">
-                        <span>Speed Band: ${item.SpeedBand}</span>
-                        <span>Category: ${item.RoadCategory}</span>
+                        <span>Speed Band: ${item.SpeedBand} (Cat ${item.RoadCategory})</span>
+                        <span style="font-weight: 600; color: #0284c7;">${distText}</span>
                     </div>
                 `;
 
