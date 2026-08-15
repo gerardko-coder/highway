@@ -431,7 +431,6 @@
             return R * c;
         }
 
-        // Calculate distance in meters for individual road segment lengths
         function getSegmentLengthMeters(startLat, startLng, endLat, endLng) {
             return calculateDistanceKm(startLat, startLng, endLat, endLng) * 1000;
         }
@@ -480,7 +479,7 @@
                 color: '#0284c7',
                 fillColor: '#0284c7',
                 fillOpacity: 0.08,
-                weight: 2,
+                weight: 1.5,
                 dashArray: '6, 6'
             }).addTo(map);
 
@@ -577,14 +576,12 @@
 
                 if (isNaN(startLat) || isNaN(startLng)) return false;
 
-                // 1. Must be a major road category
                 const roadNameUpper = (item.RoadName || '').toUpperCase();
                 const isMajorCategory = MAJOR_ROAD_CATEGORIES.includes(String(item.RoadCategory)) ||
                                         EXPRESSWAY_KEYWORDS.some(kw => roadNameUpper.includes(kw));
 
                 if (!isMajorCategory) return false;
 
-                // 2. Must be within 4km radius
                 const distanceKm = calculateDistanceKm(
                     currentUserPos.lat, currentUserPos.lng,
                     startLat, startLng
@@ -592,7 +589,6 @@
 
                 if (distanceKm > RADIUS_KM) return false;
 
-                // 3. Ignore ALL speed bands if segment length is shorter than 100m (0.1 km)
                 if (!isNaN(endLat) && !isNaN(endLng)) {
                     const segmentLengthMeters = getSegmentLengthMeters(startLat, startLng, endLat, endLng);
                     if (segmentLengthMeters < 100) {
@@ -648,10 +644,11 @@
                 const speedClass = getSpeedClass(minSpeed, maxSpeed);
 
                 if (!isNaN(startLat) && !isNaN(startLng) && !isNaN(endLat) && !isNaN(endLng)) {
+                    // Thinner line weight (3.5px) for clear map background visibility
                     const polyline = L.polyline([[startLat, startLng], [endLat, endLng]], {
                         color: color,
-                        weight: 6,
-                        opacity: 0.9
+                        weight: 3.5,
+                        opacity: 0.8
                     });
 
                     polyline.bindPopup(`
