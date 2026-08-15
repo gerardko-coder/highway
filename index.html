@@ -234,7 +234,6 @@
             border-radius: 2px;
         }
 
-        /* High Visibility Map Popups */
         .leaflet-popup-content-wrapper {
             background-color: #ffffff !important;
             color: #0f172a !important;
@@ -259,7 +258,6 @@
             100% { box-shadow: 0 0 0 0 rgba(2, 132, 199, 0); }
         }
 
-        /* Mobile Responsive Drawer */
         @media (max-width: 768px) {
             header {
                 padding: 0.5rem 0.75rem;
@@ -333,7 +331,7 @@
 
     <header>
         <div class="header-title">
-            <h1>Nearby Slowdowns &amp; Delays</h1>
+            <h1>Nearby Traffic Delays</h1>
             <p>LTA Speed Bands &bull; 10km Vicinity (Slowdowns Only)</p>
         </div>
         <div class="controls">
@@ -375,9 +373,9 @@
 
     <script>
         const DATA_URL = "./traffic.json";
-        const RADIUS_KM = 10.0; // Increased radius to 10 kilometers
+        const RADIUS_KM = 10.0;
 
-        const MAJOR_ROAD_CATEGORIES = ['A', '1', '2', '3'];
+        const MAJOR_ROAD_CATEGORIES = ['A', '1', '2', '3', '4'];
         const EXPRESSWAY_KEYWORDS = ['PIE', 'ECP', 'AYE', 'CTE', 'SLE', 'TPE', 'KPE', 'BKE', 'MCE', 'NSE', 'EXPRESSWAY'];
 
         const DEFAULT_LOCATION = { lat: 1.3521, lng: 103.8198 };
@@ -571,23 +569,35 @@
 
                 if (isNaN(startLat) || isNaN(startLng)) return false;
 
-                // 1. Filter out "green" smooth roads (average speed >= 40 km/h)
+                // 1. Explicitly EXCLUDE Category 5 roads
+                const categoryStr = String(item.RoadCategory || '').trim().toUpperCase();
+                if (categoryStr.startsWith('5')) {
+                    return false;
+                }
+
+                // 2. Filter out "green" smooth roads (average speed >= 40 km/h)
                 const minSpeed = parseFloat(item.MinimumSpeed) || 0;
                 const maxSpeed = parseFloat(item.MaximumSpeed) || 0;
                 const avgSpeed = (minSpeed + maxSpeed) / 2;
 
                 if (avgSpeed >= 40) {
-                    return false; // Skip smooth traffic
+                    return false;
                 }
 
-                // 2. Must be a major road category
+                // 3. Remove "Moderate" (20–39 km/h) speeds for Category 3 and 4 roads
+                const isCat3or4 = categoryStr === '3' || categoryStr === '4';
+                if (isCat3or4 && avgSpeed >= 20 && avgSpeed < 40) {
+                    return false; // Skip moderate slowdowns on minor roads
+                }
+
+                // 4. Must match category whitelist or expressway keywords
                 const roadNameUpper = (item.RoadName || '').toUpperCase();
-                const isMajorCategory = MAJOR_ROAD_CATEGORIES.includes(String(item.RoadCategory)) ||
+                const isMajorCategory = MAJOR_ROAD_CATEGORIES.includes(categoryStr) ||
                                         EXPRESSWAY_KEYWORDS.some(kw => roadNameUpper.includes(kw));
 
                 if (!isMajorCategory) return false;
 
-                // 3. Must be within 10km radius
+                // 5. Must be within 10km radius
                 const distanceKm = calculateDistanceKm(
                     currentUserPos.lat, currentUserPos.lng,
                     startLat, startLng
@@ -595,14 +605,10 @@
 
                 if (distanceKm > RADIUS_KM) return false;
 
-                // 4. Ignore short road segments:
-                //    - For "red" or "orange" speeds (<40 km/h): ignore if shorter than 50 meters
-                //    - For other speeds: ignore if shorter than 100 meters
+                // 6. Ignore short segments (<50m for delayed stretches)
                 if (!isNaN(endLat) && !isNaN(endLng)) {
                     const segmentLengthMeters = getSegmentLengthMeters(startLat, startLng, endLat, endLng);
-                    const thresholdMeters = (avgSpeed < 40) ? 50 : 100;
-
-                    if (segmentLengthMeters < thresholdMeters) {
+                    if (segmentLengthMeters < 50) {
                         return false;
                     }
                 }
