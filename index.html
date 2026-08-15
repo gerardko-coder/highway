@@ -10,14 +10,14 @@
     
     <style>
         :root {
-            --bg-color: #0f172a;
-            --card-bg: #1e293b;
-            --text-color: #f8fafc;
-            --text-muted: #94a3b8;
-            --border-color: #334155;
-            --accent-green: #22c55e;
-            --accent-yellow: #eab308;
-            --accent-red: #ef4444;
+            --bg-color: #f1f5f9;
+            --card-bg: #ffffff;
+            --text-color: #0f172a;
+            --text-muted: #64748b;
+            --border-color: #cbd5e1;
+            --accent-green: #16a34a;
+            --accent-yellow: #ca8a04;
+            --accent-red: #dc2626;
             --accent-blue: #0284c7;
         }
 
@@ -49,12 +49,13 @@
             z-index: 1000;
             flex-wrap: wrap;
             gap: 0.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
         }
 
         .header-title h1 {
             font-size: 1.1rem;
             font-weight: 700;
-            color: #38bdf8;
+            color: #0284c7;
         }
 
         .header-title p {
@@ -88,20 +89,22 @@
         }
 
         .btn-icon {
-            background-color: #334155;
+            background-color: #e2e8f0;
+            color: #0f172a;
         }
 
         .btn-icon:hover {
-            background-color: #475569;
+            background-color: #cbd5e1;
         }
 
         .status-badge {
             font-size: 0.7rem;
             padding: 0.25rem 0.5rem;
             border-radius: 9999px;
-            background-color: #334155;
+            background-color: #e2e8f0;
             color: var(--text-muted);
             white-space: nowrap;
+            font-weight: 600;
         }
 
         .main-container {
@@ -138,7 +141,7 @@
 
         .filter-info {
             font-size: 0.75rem;
-            color: #38bdf8;
+            color: #0284c7;
             font-weight: 600;
         }
 
@@ -161,17 +164,18 @@
         }
 
         .expressway-card {
-            background-color: var(--bg-color);
+            background-color: var(--card-bg);
             border: 1px solid var(--border-color);
             border-radius: 0.5rem;
             padding: 0.75rem;
             margin-bottom: 0.5rem;
             cursor: pointer;
-            transition: border-color 0.2s;
+            transition: border-color 0.2s, box-shadow 0.2s;
         }
 
         .expressway-card:hover {
             border-color: var(--accent-blue);
+            box-shadow: 0 2px 8px rgba(2, 132, 199, 0.15);
         }
 
         .card-header {
@@ -193,9 +197,9 @@
             font-size: 0.75rem;
         }
 
-        .speed-smooth { background-color: rgba(34, 197, 94, 0.2); color: var(--accent-green); }
-        .speed-moderate { background-color: rgba(234, 179, 8, 0.2); color: var(--accent-yellow); }
-        .speed-slow { background-color: rgba(239, 68, 68, 0.2); color: var(--accent-red); }
+        .speed-smooth { background-color: rgba(22, 163, 74, 0.15); color: var(--accent-green); }
+        .speed-moderate { background-color: rgba(202, 138, 4, 0.15); color: var(--accent-yellow); }
+        .speed-slow { background-color: rgba(220, 38, 38, 0.15); color: var(--accent-red); }
 
         .card-metrics {
             display: flex;
@@ -208,7 +212,7 @@
             position: absolute;
             bottom: 20px;
             left: 20px;
-            background: rgba(30, 41, 59, 0.9);
+            background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(4px);
             padding: 8px 12px;
             border-radius: 8px;
@@ -216,6 +220,7 @@
             z-index: 1000;
             font-size: 0.75rem;
             pointer-events: none;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
         }
 
         .legend-item {
@@ -231,21 +236,29 @@
             border-radius: 2px;
         }
 
-        /* Pulsing User Location Marker */
+        /* High Visibility Map Popups & Tooltips */
+        .leaflet-popup-content-wrapper {
+            background-color: #ffffff !important;
+            color: #0f172a !important;
+            border-radius: 8px !important;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+            font-size: 0.85rem !important;
+        }
+
         .user-location-marker {
             width: 18px;
             height: 18px;
-            background-color: #38bdf8;
+            background-color: #0284c7;
             border: 3px solid white;
             border-radius: 50%;
-            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            box-shadow: 0 0 10px rgba(0,0,0,0.3);
             animation: pulse 1.8s infinite;
         }
 
         @keyframes pulse {
-            0% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.7); }
-            70% { box-shadow: 0 0 0 14px rgba(56, 189, 248, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0); }
+            0% { box-shadow: 0 0 0 0 rgba(2, 132, 199, 0.7); }
+            70% { box-shadow: 0 0 0 14px rgba(2, 132, 199, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(2, 132, 199, 0); }
         }
 
         /* Mobile Responsive Drawer */
@@ -283,7 +296,7 @@
                 border-top: 1px solid var(--border-color);
                 border-top-left-radius: 1rem;
                 border-top-right-radius: 1rem;
-                box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
+                box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
                 transform: translateY(calc(100% - 50px));
             }
 
@@ -365,15 +378,11 @@
 
     <script>
         const DATA_URL = "./traffic.json";
-        const RADIUS_KM = 4.0; // Filter threshold set to 4 kilometers
+        const RADIUS_KM = 4.0;
 
-        // Only include major categories: 'A' (Expressways), '1' (Category 1 Arterial), '2' (Category 2 Major Arterial), '3' (Category 3 Minor Arterial)
         const MAJOR_ROAD_CATEGORIES = ['A', '1', '2', '3'];
-
-        // Known Expressways acronym list for explicit matching
         const EXPRESSWAY_KEYWORDS = ['PIE', 'ECP', 'AYE', 'CTE', 'SLE', 'TPE', 'KPE', 'BKE', 'MCE', 'NSE', 'EXPRESSWAY'];
 
-        // Default Central Singapore Location
         const DEFAULT_LOCATION = { lat: 1.3521, lng: 103.8198 };
 
         let map;
@@ -403,7 +412,8 @@
 
             L.control.zoom({ position: 'topright' }).addTo(map);
 
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            // Light Basemap (CartoDB Positron for clean visual clarity)
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
                 attribution: '&copy; OpenStreetMap &copy; CARTO',
                 maxZoom: 18
             }).addTo(map);
@@ -461,14 +471,13 @@
             if (userMarker) map.removeLayer(userMarker);
             if (userCircle) map.removeLayer(userCircle);
 
-            // Draw 4km radius circle around user location
             userCircle = L.circle([currentUserPos.lat, currentUserPos.lng], {
                 radius: RADIUS_KM * 1000,
                 color: '#0284c7',
                 fillColor: '#0284c7',
-                fillOpacity: 0.05,
-                weight: 1.5,
-                dashArray: '4, 4'
+                fillOpacity: 0.08,
+                weight: 2,
+                dashArray: '6, 6'
             }).addTo(map);
 
             const userIcon = L.divIcon({
@@ -537,9 +546,9 @@
 
         function getColorBySpeed(minSpeed, maxSpeed) {
             const avgSpeed = (parseFloat(minSpeed) + parseFloat(maxSpeed)) / 2;
-            if (avgSpeed >= 40) return '#22c55e';
-            if (avgSpeed >= 20) return '#eab308';
-            return '#ef4444';
+            if (avgSpeed >= 40) return '#16a34a';
+            if (avgSpeed >= 20) return '#ca8a04';
+            return '#dc2626';
         }
 
         function getSpeedClass(minSpeed, maxSpeed) {
@@ -556,7 +565,6 @@
 
             if (!currentUserPos) return;
 
-            // Filter data for BOTH 4km Radius AND Major Road Categories (filtering out minor estate roads)
             const nearbyItems = trafficData.filter(item => {
                 const startLat = parseFloat(item.StartLat);
                 const startLng = parseFloat(item.StartLon);
@@ -581,11 +589,24 @@
 
             const selectedFilter = document.getElementById('roadFilter').value;
 
-            const filteredData = nearbyItems.filter(item => {
+            let filteredData = nearbyItems.filter(item => {
                 if (selectedFilter !== 'ALL') {
                     return item.RoadName === selectedFilter;
                 }
                 return true;
+            });
+
+            filteredData.sort((a, b) => {
+                const speedBandA = parseInt(a.SpeedBand, 10) || 0;
+                const speedBandB = parseInt(b.SpeedBand, 10) || 0;
+
+                if (speedBandA !== speedBandB) {
+                    return speedBandA - speedBandB;
+                }
+
+                const nameA = (a.RoadName || '').toUpperCase();
+                const nameB = (b.RoadName || '').toUpperCase();
+                return nameA.localeCompare(nameB);
             });
 
             document.getElementById('filterInfo').textContent = 
@@ -609,16 +630,19 @@
                 const speedClass = getSpeedClass(minSpeed, maxSpeed);
 
                 if (!isNaN(startLat) && !isNaN(startLng) && !isNaN(endLat) && !isNaN(endLng)) {
+                    // Thick high-contrast line styling
                     const polyline = L.polyline([[startLat, startLng], [endLat, endLng]], {
                         color: color,
-                        weight: 5,
-                        opacity: 0.85
+                        weight: 6,
+                        opacity: 0.9
                     });
 
                     polyline.bindPopup(`
-                        <strong>${item.RoadName}</strong><br/>
-                        Speed: ${minSpeed} - ${maxSpeed} km/h<br/>
-                        Speed Band: ${item.SpeedBand} (Cat ${item.RoadCategory})
+                        <div style="font-size:0.9rem;">
+                            <strong>${item.RoadName}</strong><br/>
+                            Speed: <strong>${minSpeed} - ${maxSpeed} km/h</strong><br/>
+                            Speed Band: ${item.SpeedBand} (Category ${item.RoadCategory})
+                        </div>
                     `);
 
                     polylineGroup.addLayer(polyline);
