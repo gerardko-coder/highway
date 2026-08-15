@@ -412,7 +412,6 @@
 
             L.control.zoom({ position: 'topright' }).addTo(map);
 
-            // Light Basemap (CartoDB Positron for clean visual clarity)
             L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
                 attribution: '&copy; OpenStreetMap &copy; CARTO',
                 maxZoom: 18
@@ -430,6 +429,11 @@
                       Math.sin(dLon / 2) * Math.sin(dLon / 2);
             const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
             return R * c;
+        }
+
+        // Calculate distance in meters for individual road segment lengths
+        function getSegmentLengthMeters(startLat, startLng, endLat, endLng) {
+            return calculateDistanceKm(startLat, startLng, endLat, endLng) * 1000;
         }
 
         function getUserLocation() {
@@ -568,21 +572,35 @@
             const nearbyItems = trafficData.filter(item => {
                 const startLat = parseFloat(item.StartLat);
                 const startLng = parseFloat(item.StartLon);
+                const endLat = parseFloat(item.EndLat);
+                const endLng = parseFloat(item.EndLon);
 
                 if (isNaN(startLat) || isNaN(startLng)) return false;
 
+                // 1. Must be a major road category
                 const roadNameUpper = (item.RoadName || '').toUpperCase();
                 const isMajorCategory = MAJOR_ROAD_CATEGORIES.includes(String(item.RoadCategory)) ||
                                         EXPRESSWAY_KEYWORDS.some(kw => roadNameUpper.includes(kw));
 
                 if (!isMajorCategory) return false;
 
+                // 2. Must be within 4km radius
                 const distanceKm = calculateDistanceKm(
                     currentUserPos.lat, currentUserPos.lng,
                     startLat, startLng
                 );
 
-                return distanceKm <= RADIUS_KM;
+                if (distanceKm > RADIUS_KM) return false;
+
+                // 3. Ignore ALL speed bands if segment length is shorter than 100m (0.1 km)
+                if (!isNaN(endLat) && !isNaN(endLng)) {
+                    const segmentLengthMeters = getSegmentLengthMeters(startLat, startLng, endLat, endLng);
+                    if (segmentLengthMeters < 100) {
+                        return false;
+                    }
+                }
+
+                return true;
             });
 
             populateRoadFilter(nearbyItems);
@@ -630,7 +648,6 @@
                 const speedClass = getSpeedClass(minSpeed, maxSpeed);
 
                 if (!isNaN(startLat) && !isNaN(startLng) && !isNaN(endLat) && !isNaN(endLng)) {
-                    // Thick high-contrast line styling
                     const polyline = L.polyline([[startLat, startLng], [endLat, endLng]], {
                         color: color,
                         weight: 6,
