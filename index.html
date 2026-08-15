@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Nearby Traffic Delays (4km Radius)</title>
+    <title>Nearby Traffic Delays (10km Radius)</title>
     
     <!-- Leaflet CSS for Map rendering -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -334,12 +334,12 @@
     <header>
         <div class="header-title">
             <h1>Nearby Slowdowns &amp; Delays</h1>
-            <p>LTA Speed Bands &bull; 4km Vicinity (Slowdowns Only)</p>
+            <p>LTA Speed Bands &bull; 10km Vicinity (Slowdowns Only)</p>
         </div>
         <div class="controls">
             <span id="lastUpdated" class="status-badge">Updated: Never</span>
             <button id="locateBtn" class="btn-icon" title="Find My Location">
-                📍 <span class="btn-text">Recenter (4km)</span>
+                📍 <span class="btn-text">Recenter (10km)</span>
             </button>
             <button id="refreshBtn">🔄 Refresh</button>
         </div>
@@ -353,9 +353,9 @@
                 <div class="drawer-bar"></div>
             </div>
             <div class="filter-bar">
-                <div id="filterInfo" class="filter-info">Showing traffic delays within 4km...</div>
+                <div id="filterInfo" class="filter-info">Showing traffic delays within 10km...</div>
                 <select id="roadFilter">
-                    <option value="ALL">All Delayed Roads (4km)</option>
+                    <option value="ALL">All Delayed Roads (10km)</option>
                 </select>
             </div>
             <div id="expresswayList" class="expressway-list">
@@ -375,7 +375,7 @@
 
     <script>
         const DATA_URL = "./traffic.json";
-        const RADIUS_KM = 4.0;
+        const RADIUS_KM = 10.0; // Increased radius to 10 kilometers
 
         const MAJOR_ROAD_CATEGORIES = ['A', '1', '2', '3'];
         const EXPRESSWAY_KEYWORDS = ['PIE', 'ECP', 'AYE', 'CTE', 'SLE', 'TPE', 'KPE', 'BKE', 'MCE', 'NSE', 'EXPRESSWAY'];
@@ -405,7 +405,7 @@
         });
 
         function initMap() {
-            map = L.map('map', { zoomControl: false }).setView([DEFAULT_LOCATION.lat, DEFAULT_LOCATION.lng], 13);
+            map = L.map('map', { zoomControl: false }).setView([DEFAULT_LOCATION.lat, DEFAULT_LOCATION.lng], 12);
 
             L.control.zoom({ position: 'topright' }).addTo(map);
 
@@ -453,13 +453,13 @@
                     updateUserMapLocation();
                     renderData();
 
-                    locateBtn.innerHTML = '📍 <span class="btn-text">Recenter (4km)</span>';
+                    locateBtn.innerHTML = '📍 <span class="btn-text">Recenter (10km)</span>';
                 },
                 (error) => {
                     currentUserPos = DEFAULT_LOCATION;
                     updateUserMapLocation();
                     renderData();
-                    locateBtn.innerHTML = '📍 <span class="btn-text">Recenter (4km)</span>';
+                    locateBtn.innerHTML = '📍 <span class="btn-text">Recenter (10km)</span>';
                 },
                 { enableHighAccuracy: true, timeout: 8000 }
             );
@@ -475,7 +475,7 @@
                 radius: RADIUS_KM * 1000,
                 color: '#0284c7',
                 fillColor: '#0284c7',
-                fillOpacity: 0.08,
+                fillOpacity: 0.05,
                 weight: 1.5,
                 dashArray: '6, 6'
             }).addTo(map);
@@ -489,7 +489,7 @@
             userMarker = L.marker([currentUserPos.lat, currentUserPos.lng], { icon: userIcon }).addTo(map);
             userMarker.bindPopup("<strong>You are here</strong>");
 
-            map.flyTo([currentUserPos.lat, currentUserPos.lng], 13.5);
+            map.flyTo([currentUserPos.lat, currentUserPos.lng], 12);
         }
 
         async function fetchTrafficData() {
@@ -529,7 +529,7 @@
         function populateRoadFilter(nearbyItems) {
             const filterSelect = document.getElementById('roadFilter');
             const selectedVal = filterSelect.value;
-            filterSelect.innerHTML = '<option value="ALL">All Delayed Roads (4km)</option>';
+            filterSelect.innerHTML = '<option value="ALL">All Delayed Roads (10km)</option>';
 
             const uniqueRoads = [...new Set(nearbyItems.map(item => item.RoadName).filter(Boolean))].sort();
             uniqueRoads.forEach(road => {
@@ -587,7 +587,7 @@
 
                 if (!isMajorCategory) return false;
 
-                // 3. Must be within 4km radius
+                // 3. Must be within 10km radius
                 const distanceKm = calculateDistanceKm(
                     currentUserPos.lat, currentUserPos.lng,
                     startLat, startLng
@@ -595,10 +595,14 @@
 
                 if (distanceKm > RADIUS_KM) return false;
 
-                // 4. Ignore segments shorter than 100m
+                // 4. Ignore short road segments:
+                //    - For "red" or "orange" speeds (<40 km/h): ignore if shorter than 50 meters
+                //    - For other speeds: ignore if shorter than 100 meters
                 if (!isNaN(endLat) && !isNaN(endLng)) {
                     const segmentLengthMeters = getSegmentLengthMeters(startLat, startLng, endLat, endLng);
-                    if (segmentLengthMeters < 100) {
+                    const thresholdMeters = (avgSpeed < 40) ? 50 : 100;
+
+                    if (segmentLengthMeters < thresholdMeters) {
                         return false;
                     }
                 }
@@ -631,10 +635,10 @@
             });
 
             document.getElementById('filterInfo').textContent = 
-                `Found ${nearbyItems.length} traffic delays within 4km`;
+                `Found ${nearbyItems.length} traffic delays within 10km`;
 
             if (filteredData.length === 0) {
-                listContainer.innerHTML = `<div style="padding: 1rem; color: var(--text-muted); font-size: 0.85rem;">🎉 Clear roads! No major traffic slowdowns within 4km.</div>`;
+                listContainer.innerHTML = `<div style="padding: 1rem; color: var(--text-muted); font-size: 0.85rem;">🎉 Clear roads! No major traffic slowdowns within 10km.</div>`;
                 return;
             }
 
