@@ -3,7 +3,7 @@ name: Fetch LTA Traffic Data
 on:
   schedule:
     # Runs every 20 minutes between 6:00 AM and 11:00 PM SGT (22:00 to 15:00 UTC)
-    - cron: '*/20 22-23,0-15 * * *'
+    # - cron: '*/20 22-23,0-15 * * *'
   workflow_dispatch: # Allows manual trigger anytime from GitHub Actions tab
 
 permissions:
